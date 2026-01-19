@@ -6,6 +6,12 @@ html, body {
   font-family: system-ui, Arial, sans-serif;
 }
 
+/* Important for mobile swipe-look (prevents browser gestures) */
+canvas {
+  display: block;
+  touch-action: none;
+}
+
 #hud {
   position: fixed;
   top: 12px;
@@ -17,6 +23,10 @@ html, body {
   border-radius: 10px;
   backdrop-filter: blur(6px);
   line-height: 1.35;
+
+  padding-top: calc(10px + env(safe-area-inset-top));
+  padding-left: calc(12px + env(safe-area-inset-left));
+  padding-right: calc(12px + env(safe-area-inset-right));
 }
 
 #hint {
@@ -73,8 +83,8 @@ html, body {
 
 #mobileControls {
   position: fixed;
-  bottom: 16px;
-  left: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: calc(16px + env(safe-area-inset-left));
   z-index: 15;
   user-select: none;
   touch-action: none;
@@ -84,6 +94,11 @@ html, body {
   display: flex;
   gap: 10px;
   margin-top: 10px;
+}
+
+#mobileControls .row.topRow {
+  margin-top: 0;
+  margin-bottom: 10px;
 }
 
 #mobileControls .btn {
@@ -98,6 +113,14 @@ html, body {
   backdrop-filter: blur(6px);
 }
 
+#mobileControls .btn.cam {
+  width: 82px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+/* Desktop: hide mobile controls */
 @media (pointer:fine) {
   #mobileControls { display: none; }
 }
