@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>3D Maze Explorer - Week 9</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="hud">
+    <div id="status">Reach the goal! (Press C to toggle camera)</div>
+    <div id="mode">Mode: Top-Down</div>
+    <div id="hint">FPS: Click to lock mouse • ESC to unlock</div>
+  </div>
+
+  <div id="crosshair" class="hidden">+</div>
+
+  <div id="winOverlay" class="hidden">
+    <div class="panel">
+      <h1>You Win</h1>
+      <button id="restartBtn">Restart</button>
+    </div>
+  </div>
+
+  <!-- Mobile Controls -->
+  <div id="mobileControls">
+    <button class="btn" id="btnUp">▲</button>
+    <div class="row">
+      <button class="btn" id="btnLeft">◀</button>
+      <button class="btn" id="btnDown">▼</button>
+      <button class="btn" id="btnRight">▶</button>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
