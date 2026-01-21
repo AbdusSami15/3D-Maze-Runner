@@ -290,12 +290,24 @@ canvas{
   z-index: 41;
 }
 
+/* Fullscreen button next to CAM (right side) */
+.mBtn.fs{
+  width:64px;
+  font-size:18px;
+  letter-spacing:0;
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right) + 94px);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 41;
+}
+
 /* Explicit button placement for grid */
 #btnUp{ grid-column: 2; grid-row: 1; }
 #btnLeft{ grid-column: 1; grid-row: 2; }
 #btnDown{ grid-column: 2; grid-row: 2; }
 #btnRight{ grid-column: 3; grid-row: 2; }
 
+/* On desktop, hide only the movement d-pad, keep CAM + fullscreen available */
 @media (pointer:fine){
-  #mobileControls{ display:none; }
+  #mobileControls .mBtn:not(.cam):not(.fs){ display:none; }
 }

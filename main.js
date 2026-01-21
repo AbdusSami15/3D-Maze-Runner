@@ -67,6 +67,7 @@ const ui = {
   restartBtn: document.getElementById("restartBtn"),
 
   btnCam: document.getElementById("btnCam"),
+  btnFS: document.getElementById("btnFS"),
   btnUp: document.getElementById("btnUp"),
   btnDown: document.getElementById("btnDown"),
   btnLeft: document.getElementById("btnLeft"),
@@ -88,6 +89,14 @@ function requestFullscreenSafe() {
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     else if (el.msRequestFullscreen) el.msRequestFullscreen();
   } catch (_) { }
+}
+
+// On-screen fullscreen button (mobile/desktop)
+if (ui.btnFS) {
+  ui.btnFS.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    requestFullscreenSafe();
+  });
 }
 
 function isLikelyMobile() {
