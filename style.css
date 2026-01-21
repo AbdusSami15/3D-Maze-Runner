@@ -235,16 +235,23 @@ canvas{
   z-index: 40;
   user-select: none;
   touch-action: none;
+
+  /* D-Pad layout (2 rows):
+     Row 1:   [ ] [UP] [ ]
+     Row 2: [L] [DN] [R]
+     CAM is moved out and pinned to the right side.
+  */
+  display: grid;
+  grid-template-columns: 64px 64px 64px;
+  grid-template-rows: 64px 64px;
+  gap: 10px;
 }
 
 #mobileControls .row{
-  display:flex;
-  gap:10px;
-  margin-top:10px;
+  display: contents;
 }
 #mobileControls .row.topRow{
-  margin-top:0;
-  margin-bottom:10px;
+  display: contents;
 }
 
 .mBtn{
@@ -268,7 +275,19 @@ canvas{
   width:84px;
   font-size:15px;
   letter-spacing:0.5px;
+
+  /* Move CAM away from the D-pad cluster */
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 41;
 }
+
+/* Explicit button placement for grid */
+#btnUp{ grid-column: 2; grid-row: 1; }
+#btnLeft{ grid-column: 1; grid-row: 2; }
+#btnDown{ grid-column: 2; grid-row: 2; }
+#btnRight{ grid-column: 3; grid-row: 2; }
 
 @media (pointer:fine){
   #mobileControls{ display:none; }
