@@ -31,7 +31,8 @@ const CONFIG = {
 
   // Levels
   startLevel: 1,
-  maxLevel: 50,
+  maxLevel: Number.POSITIVE_INFINITY,
+  maxMazeOddSize: 41,
   baseMazeOddSize: 11,
   sizeGrowEveryLevel: 2,
   loopChanceBase: 0.04,
@@ -206,7 +207,8 @@ window.addEventListener("keydown", () => AudioFX.userGestureUnlock(), { once: tr
    (UNCHANGED)
 ========================= */
 function generateMaze(level) {
-  const size = makeOdd(CONFIG.baseMazeOddSize + (level - 1) * CONFIG.sizeGrowEveryLevel);
+  const raw = CONFIG.baseMazeOddSize + (level - 1) * CONFIG.sizeGrowEveryLevel;
+  const size = makeOdd(Math.min(raw, CONFIG.maxMazeOddSize));
   const rows = size;
   const cols = size;
 
@@ -286,34 +288,47 @@ function generateMaze(level) {
 }
 
 const LevelManager = (() => {
-  const KEY = "maze3d_progress_v1";
-  let currentLevel = CONFIG.startLevel;
+  const KEY = "maze3d_progress_v2";
+  let currentLevel = Math.max(1, CONFIG.startLevel);
+  let bestLevel = currentLevel;
 
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
-      if (typeof data?.level === "number") currentLevel = clamp(data.level, 1, CONFIG.maxLevel);
+
+      if (typeof data?.level === "number" && isFinite(data.level)) currentLevel = Math.max(1, Math.floor(data.level));
+      if (typeof data?.best === "number" && isFinite(data.best)) bestLevel = Math.max(1, Math.floor(data.best));
+
+      bestLevel = Math.max(bestLevel, currentLevel);
     } catch {}
   }
 
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify({ level: currentLevel })); } catch {}
+    try { localStorage.setItem(KEY, JSON.stringify({ level: currentLevel, best: bestLevel })); } catch {}
+  }
+
+  function updateUI() {
+    if (ui.levelText) ui.levelText.textContent = `Level ${currentLevel}  |  Best ${bestLevel}`;
   }
 
   function setLevel(lvl) {
-    currentLevel = clamp(lvl, 1, CONFIG.maxLevel);
+    currentLevel = Math.max(1, Math.floor(lvl));
+    if (currentLevel > bestLevel) bestLevel = currentLevel;
     save();
+    updateUI();
     Game.loadLevel(currentLevel);
   }
 
   function nextLevel() { setLevel(currentLevel + 1); }
   function restartLevel() { setLevel(currentLevel); }
   function getLevel() { return currentLevel; }
+  function getBest() { return bestLevel; }
 
   load();
-  return { setLevel, nextLevel, restartLevel, getLevel };
+  updateUI();
+  return { setLevel, nextLevel, restartLevel, getLevel, getBest, updateUI };
 })();
 
 ui.restartBtn?.addEventListener("click", () => LevelManager.restartLevel());
@@ -875,7 +890,7 @@ function rebuildLevel(level) {
   hasWon = false;
   hideWin();
   if (ui.status) ui.status.textContent = "Reach the goal! (Press C to toggle camera)";
-  if (ui.levelText) ui.levelText.textContent = `Level ${level}`;
+  LevelManager.updateUI?.();
   setHudMode();
 }
 
@@ -989,7 +1004,7 @@ function loop(nowMs) {
 
     if (goal && player.position.distanceTo(goal.position) <= CONFIG.winDistance) {
       showWin();
-      setTimeout(() => LevelManager.nextLevel(), 650);
+      
     }
   } else {
     AudioFX.stopSteps();

@@ -3,36 +3,50 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>3D Maze Explorer - Week 9</title>
+  <title>3D Maze Explorer</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <!-- HUD -->
   <div id="hud">
     <div id="status">Reach the goal! (Press C to toggle camera)</div>
     <div id="mode">Mode: Top-Down</div>
+    <div id="levelText" class="levelPill">Level 1</div>
     <div id="hint">FPS: Click to lock mouse • ESC to unlock</div>
   </div>
 
+  <!-- Crosshair (optional) -->
   <div id="crosshair" class="hidden">+</div>
 
-  <div id="winOverlay" class="hidden">
-    <div class="panel">
-      <h1>You Win</h1>
-      <button id="restartBtn">Restart</button>
+  <!-- WIN OVERLAY -->
+  <div id="winOverlay" class="overlay hidden">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+      <div class="cardTopGlow"></div>
+
+      <div class="cardBody">
+        <div class="tag">Level Complete</div>
+        <h1 id="winTitle" class="title">You Win</h1>
+        <p class="sub">Choose what to do next</p>
+
+        <div class="actions">
+          <button id="restartBtn" class="btn btnSecondary" type="button">Restart</button>
+          <button id="nextBtn" class="btn btnPrimary" type="button">Next Level</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- Mobile Controls -->
   <div id="mobileControls">
     <div class="row topRow">
-      <button class="btn cam" id="btnCam">CAM</button>
+      <button class="mBtn cam" id="btnCam" type="button">CAM</button>
     </div>
 
-    <button class="btn" id="btnUp">▲</button>
+    <button class="mBtn" id="btnUp" type="button">▲</button>
     <div class="row">
-      <button class="btn" id="btnLeft">◀</button>
-      <button class="btn" id="btnDown">▼</button>
-      <button class="btn" id="btnRight">▶</button>
+      <button class="mBtn" id="btnLeft" type="button">◀</button>
+      <button class="mBtn" id="btnDown" type="button">▼</button>
+      <button class="mBtn" id="btnRight" type="button">▶</button>
     </div>
   </div>
 
