@@ -77,6 +77,41 @@ const ui = {
 };
 
 /* =========================
+   FULLSCREEN (DESKTOP + MOBILE)
+   Notes: Most mobile browsers require a user gesture; iOS Safari may ignore requestFullscreen.
+========================= */
+function requestFullscreenSafe() {
+  const el = document.documentElement;
+  if (document.fullscreenElement) return;
+  try {
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (el.msRequestFullscreen) el.msRequestFullscreen();
+  } catch (_) { }
+}
+
+function isLikelyMobile() {
+  try {
+    return window.matchMedia && (window.matchMedia("(pointer:coarse)").matches || window.innerWidth < 768);
+  } catch (_) {
+    return window.innerWidth < 768;
+  }
+}
+
+// Desktop: press F to go fullscreen
+window.addEventListener("keydown", (e) => {
+  if (e.key === "f" || e.key === "F") requestFullscreenSafe();
+});
+
+// Mobile: first user gesture attempts fullscreen (if supported)
+let _fsTried = false;
+function tryFullscreenOnce() {
+  if (_fsTried) return;
+  _fsTried = true;
+  if (isLikelyMobile()) requestFullscreenSafe();
+}
+
+/* =========================
    INPUT
 ========================= */
 const input = { up: false, down: false, left: false, right: false };
@@ -212,6 +247,11 @@ const AudioFX = (() => {
 
 window.addEventListener("pointerdown", () => AudioFX.userGestureUnlock(), { once: true });
 window.addEventListener("keydown", () => AudioFX.userGestureUnlock(), { once: true });
+
+// Attempt fullscreen on first interaction (mobile-friendly). Safe no-op if unsupported.
+window.addEventListener("touchstart", tryFullscreenOnce, { once: true, passive: true });
+window.addEventListener("mousedown", tryFullscreenOnce, { once: true });
+window.addEventListener("pointerdown", tryFullscreenOnce, { once: true });
 
 /* =========================
    LEVEL SYSTEM + GENERATOR
@@ -1127,7 +1167,7 @@ function rebuildLevel(level) {
   // UI
   hasWon = false;
   hideWin();
-  if (ui.status) ui.status.textContent = "Reach the goal! (Press C/CAM to toggle camera)";
+  if (ui.status) ui.status.textContent = "Reach the goal! (Press C to toggle camera)";
   LevelManager.updateUI?.();
   setHudMode();
 }
@@ -1314,4 +1354,6 @@ function onResize() {
   fpsCamera.updateProjectionMatrix();
 }
 window.addEventListener("resize", onResize);
+document.addEventListener("fullscreenchange", onResize);
+document.addEventListener("webkitfullscreenchange", onResize);
 onResize();
