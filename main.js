@@ -11,11 +11,11 @@ const CONFIG = {
   playerRadius: 0.45,
   playerY: 0.45,
 
-  // Movement feel (FASTER)
-  moveMaxSpeed: 7.0,   // was 4.0
-  moveAccel: 30.0,     // was 18.0
-  moveDecel: 26.0,     // was 22.0
-  moveTurnBoost: 12.0, // was 10.0
+  // Movement feel (ENHANCED)
+  moveMaxSpeed: 7.5,
+  moveAccel: 32.0,
+  moveDecel: 28.0,
+  moveTurnBoost: 14.0,
 
   // Top cam
   topCamHeight: 40,
@@ -23,7 +23,7 @@ const CONFIG = {
 
   // FPS
   fpsEyeHeight: 0.75,
-  fpsFov: 70,
+  fpsFov: 75,
   fpsPitchLimit: 1.15,
 
   winDistance: 0.9,
@@ -40,12 +40,20 @@ const CONFIG = {
 
   // Audio
   audioEnabled: true,
-  stepIntervalMs: 220,
-  bumpCooldownMs: 120,
+  stepIntervalMs: 200,
+  bumpCooldownMs: 100,
+
+  // Visual FX
+  ambientParticles: true,
+  trailEffect: true,
+  glowIntensity: 1.2,
+  cameraShake: true,
+  transitionTime: 800,
 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 function makeOdd(n) { return (n % 2 === 0) ? n + 1 : n; }
+function lerp(a, b, t) { return a + (b - a) * t; }
 
 /* =========================
    DOM
@@ -116,7 +124,7 @@ window.addEventListener("blur", resetInput);
 document.addEventListener("visibilitychange", () => { if (document.hidden) resetInput(); });
 
 /* =========================
-   AUDIO (no external files)
+   AUDIO (ENHANCED)
 ========================= */
 const AudioFX = (() => {
   let ctx = null;
@@ -132,7 +140,7 @@ const AudioFX = (() => {
 
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     master = ctx.createGain();
-    master.gain.value = 0.22;
+    master.gain.value = 0.25;
     master.connect(ctx.destination);
   }
 
@@ -165,18 +173,21 @@ const AudioFX = (() => {
     osc.stop(t0 + durationMs / 1000 + 0.02);
   }
 
-  function click() { tone(520, 50, "square", 0.22); }
+  function click() { tone(580, 45, "square", 0.24); }
+  
   function win() {
-    tone(392, 90, "sine", 0.22);
-    setTimeout(() => tone(523, 120, "sine", 0.26), 90);
-    setTimeout(() => tone(659, 140, "sine", 0.28), 220);
+    // More pleasant win sound
+    tone(440, 100, "sine", 0.25);
+    setTimeout(() => tone(554, 120, "sine", 0.28), 100);
+    setTimeout(() => tone(659, 140, "sine", 0.30), 230);
+    setTimeout(() => tone(880, 180, "sine", 0.32), 380);
   }
 
   function bump() {
     const now = performance.now();
     if (now - lastBumpAt < CONFIG.bumpCooldownMs) return;
     lastBumpAt = now;
-    tone(130, 55, "sawtooth", 0.20);
+    tone(140, 50, "sawtooth", 0.18);
   }
 
   function startSteps() {
@@ -192,7 +203,7 @@ const AudioFX = (() => {
     stepTimer += dt * 1000;
     if (stepTimer >= CONFIG.stepIntervalMs) {
       stepTimer = 0;
-      tone(220 + Math.random() * 30, 30, "triangle", 0.10);
+      tone(240 + Math.random() * 40, 28, "triangle", 0.09);
     }
   }
 
@@ -204,7 +215,6 @@ window.addEventListener("keydown", () => AudioFX.userGestureUnlock(), { once: tr
 
 /* =========================
    LEVEL SYSTEM + GENERATOR
-   (UNCHANGED)
 ========================= */
 function generateMaze(level) {
   const raw = CONFIG.baseMazeOddSize + (level - 1) * CONFIG.sizeGrowEveryLevel;
@@ -297,445 +307,437 @@ const LevelManager = (() => {
       const raw = localStorage.getItem(KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
-
-      if (typeof data?.level === "number" && isFinite(data.level)) currentLevel = Math.max(1, Math.floor(data.level));
-      if (typeof data?.best === "number" && isFinite(data.best)) bestLevel = Math.max(1, Math.floor(data.best));
-
-      bestLevel = Math.max(bestLevel, currentLevel);
+      if (data.best && typeof data.best === "number") bestLevel = data.best;
+      if (bestLevel < 1) bestLevel = 1;
     } catch {}
   }
 
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify({ level: currentLevel, best: bestLevel })); } catch {}
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ best: bestLevel }));
+    } catch {}
   }
 
   function updateUI() {
-    if (ui.levelText) ui.levelText.textContent = `Level ${currentLevel}  |  Best ${bestLevel}`;
+    if (ui.levelText) {
+      ui.levelText.textContent = `Level ${currentLevel} | Best ${bestLevel}`;
+    }
   }
-
-  function setLevel(lvl) {
-    currentLevel = Math.max(1, Math.floor(lvl));
-    if (currentLevel > bestLevel) bestLevel = currentLevel;
-    save();
-    updateUI();
-    Game.loadLevel(currentLevel);
-  }
-
-  function nextLevel() { setLevel(currentLevel + 1); }
-  function restartLevel() { setLevel(currentLevel); }
-  function getLevel() { return currentLevel; }
-  function getBest() { return bestLevel; }
 
   load();
-  updateUI();
-  return { setLevel, nextLevel, restartLevel, getLevel, getBest, updateUI };
+
+  return {
+    getLevel: () => currentLevel,
+    getBest: () => bestLevel,
+    nextLevel() {
+      currentLevel++;
+      if (currentLevel > CONFIG.maxLevel) currentLevel = CONFIG.maxLevel;
+      if (currentLevel > bestLevel) {
+        bestLevel = currentLevel;
+        save();
+      }
+      updateUI();
+    },
+    restart() {
+      updateUI();
+    },
+    updateUI,
+  };
 })();
 
-ui.restartBtn?.addEventListener("click", () => LevelManager.restartLevel());
-ui.nextBtn?.addEventListener("click", () => LevelManager.nextLevel());
-
 /* =========================
-   THREE SCENE (BRIGHT, NO FOG)
+   SCENE + RENDERER
 ========================= */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x16233a);
-scene.fog = null;
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.maxPixelRatio));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 2.2;
-
+renderer.toneMappingExposure = 1.3;
 document.body.appendChild(renderer.domElement);
 
-// Strong readable lights
-scene.add(new THREE.AmbientLight(0xffffff, 1.15));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1f35);
 
-const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
-keyLight.position.set(10, 18, 10);
-scene.add(keyLight);
+// Enhanced ambient light
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
 
-const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
-fillLight.position.set(-10, 10, -8);
-scene.add(fillLight);
+// Main directional light with shadows
+const mainLight = new THREE.DirectionalLight(0xffffff, 1.8);
+mainLight.position.set(8, 16, 8);
+mainLight.castShadow = true;
+mainLight.shadow.camera.left = -25;
+mainLight.shadow.camera.right = 25;
+mainLight.shadow.camera.top = 25;
+mainLight.shadow.camera.bottom = -25;
+mainLight.shadow.camera.near = 0.1;
+mainLight.shadow.camera.far = 50;
+mainLight.shadow.mapSize.width = 2048;
+mainLight.shadow.mapSize.height = 2048;
+mainLight.shadow.bias = -0.0001;
+scene.add(mainLight);
 
-const hemi = new THREE.HemisphereLight(0xffffff, 0x4a6aa6, 1.0);
-scene.add(hemi);
+// Accent lights for atmosphere
+const accentLight1 = new THREE.PointLight(0x6366f1, 1.2, 40);
+accentLight1.position.set(-10, 10, -10);
+scene.add(accentLight1);
 
-/* =========================
-   SKY DOME (BRIGHTER)
-========================= */
-(function createSkyDome() {
-  const skyGeo = new THREE.SphereGeometry(260, 24, 16);
-  skyGeo.scale(-1, 1, 1);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 2;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-
-  const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0.0, "#263a63");
-  grad.addColorStop(0.55, "#16233a");
-  grad.addColorStop(1.0, "#0b1020");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 2, 256);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-
-  const skyMat = new THREE.MeshBasicMaterial({ map: tex });
-  const sky = new THREE.Mesh(skyGeo, skyMat);
-  scene.add(sky);
-})();
-
-// Cameras
-const topCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 800);
-const fpsCamera = new THREE.PerspectiveCamera(CONFIG.fpsFov, window.innerWidth / window.innerHeight, 0.1, 800);
-
-let activeCamera = topCamera;
-let isFPS = false;
-
-// IMPORTANT: FIX for your console error
-let hasWon = false; // must exist before loadLevel()
+const accentLight2 = new THREE.PointLight(0xf472b6, 0.8, 35);
+accentLight2.position.set(10, 8, 10);
+scene.add(accentLight2);
 
 /* =========================
-   FPS LOOK (NO POINTER LOCK)
+   MATERIALS (ENHANCED)
 ========================= */
-let yaw = 0;
-let pitch = 0;
-let lookActive = false;
-let lastX = 0;
-let lastY = 0;
+const textureLoader = new THREE.TextureLoader();
 
-renderer.domElement.addEventListener("pointerdown", (e) => {
-  if (!isFPS) return;
-  lookActive = true;
-  lastX = e.clientX;
-  lastY = e.clientY;
-});
+// Ground with grid texture
+const groundCanvas = document.createElement('canvas');
+groundCanvas.width = 512;
+groundCanvas.height = 512;
+const groundCtx = groundCanvas.getContext('2d');
 
-function stopLook() { lookActive = false; }
-renderer.domElement.addEventListener("pointerup", stopLook);
-renderer.domElement.addEventListener("pointerleave", stopLook);
-renderer.domElement.addEventListener("pointercancel", stopLook);
+// Base color
+groundCtx.fillStyle = '#1e293b';
+groundCtx.fillRect(0, 0, 512, 512);
 
-renderer.domElement.addEventListener("pointermove", (e) => {
-  if (!isFPS || !lookActive) return;
-  const dx = e.clientX - lastX;
-  const dy = e.clientY - lastY;
-  lastX = e.clientX;
-  lastY = e.clientY;
-
-  yaw -= dx * 0.004;
-  pitch -= dy * 0.004;
-  pitch = clamp(pitch, -CONFIG.fpsPitchLimit, CONFIG.fpsPitchLimit);
-});
-
-/* =========================
-   PROCEDURAL TEXTURES (BRIGHTER)
-========================= */
-function makeGroundTexture() {
-  const c = document.createElement("canvas");
-  c.width = 256; c.height = 256;
-  const g = c.getContext("2d");
-
-  g.fillStyle = "#253a63";
-  g.fillRect(0, 0, 256, 256);
-
-  for (let i = 0; i < 2200; i++) {
-    const x = (Math.random() * 256) | 0;
-    const y = (Math.random() * 256) | 0;
-    const a = Math.random() * 0.09;
-    g.fillStyle = `rgba(255,255,255,${a})`;
-    g.fillRect(x, y, 1, 1);
-  }
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(6, 6);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+// Grid lines
+groundCtx.strokeStyle = '#334155';
+groundCtx.lineWidth = 2;
+const gridSize = 32;
+for (let i = 0; i <= 512; i += gridSize) {
+  groundCtx.beginPath();
+  groundCtx.moveTo(i, 0);
+  groundCtx.lineTo(i, 512);
+  groundCtx.stroke();
+  
+  groundCtx.beginPath();
+  groundCtx.moveTo(0, i);
+  groundCtx.lineTo(512, i);
+  groundCtx.stroke();
 }
 
-function makeWallTexture() {
-  const c = document.createElement("canvas");
-  c.width = 256; c.height = 256;
-  const g = c.getContext("2d");
-
-  g.fillStyle = "#4a5f8f";
-  g.fillRect(0, 0, 256, 256);
-
-  g.strokeStyle = "rgba(255,255,255,0.16)";
-  g.lineWidth = 2;
-  for (let y = 0; y <= 256; y += 32) {
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(256, y);
-    g.stroke();
-  }
-  for (let x = 0; x <= 256; x += 32) {
-    g.beginPath();
-    g.moveTo(x, 0);
-    g.lineTo(x, 256);
-    g.stroke();
-  }
-
-  for (let i = 0; i < 1400; i++) {
-    const x = (Math.random() * 256) | 0;
-    const y = (Math.random() * 256) | 0;
-    const a = Math.random() * 0.04;
-    g.fillStyle = `rgba(0,0,0,${a})`;
-    g.fillRect(x, y, 1, 1);
-  }
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1, 1);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
+const groundTexture = new THREE.CanvasTexture(groundCanvas);
+groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
 
 const groundMat = new THREE.MeshStandardMaterial({
-  map: makeGroundTexture(),
-  roughness: 0.98,
+  map: groundTexture,
+  roughness: 0.9,
   metalness: 0.0,
-  color: 0xffffff,
-  emissive: 0x0b1630,
-  emissiveIntensity: 0.35,
 });
 
+// Walls with enhanced look
 const wallMat = new THREE.MeshStandardMaterial({
-  map: makeWallTexture(),
-  roughness: 0.85,
-  metalness: 0.0,
-  color: 0xf3f7ff,
-  emissive: 0x1a2f55,
-  emissiveIntensity: 0.55,
+  color: 0x475569,
+  roughness: 0.7,
+  metalness: 0.2,
+  envMapIntensity: 0.5,
 });
 
-/* =========================
-   PLAYER (SMOOTH MOVE + FX) - NO TRAIL
-========================= */
-const playerVel = new THREE.Vector3(0, 0, 0);
-
-const playerGeo = new THREE.SphereGeometry(CONFIG.playerRadius, 24, 18);
+// Player ball with vibrant materials
 const playerMat = new THREE.MeshStandardMaterial({
-  color: 0x6fe1ff,
-  roughness: 0.22,
-  metalness: 0.05,
-  emissive: 0x062033,
-  emissiveIntensity: 0.65,
+  color: 0x6366f1,
+  emissive: 0x4f46e5,
+  emissiveIntensity: 0.6,
+  roughness: 0.2,
+  metalness: 0.3,
 });
-const player = new THREE.Mesh(playerGeo, playerMat);
-scene.add(player);
-
-function createGlowSprite() {
-  const c = document.createElement("canvas");
-  c.width = 128;
-  c.height = 128;
-  const g = c.getContext("2d");
-
-  const grd = g.createRadialGradient(64, 64, 6, 64, 64, 64);
-  grd.addColorStop(0.0, "rgba(120,255,255,0.70)");
-  grd.addColorStop(0.35, "rgba(120,255,255,0.26)");
-  grd.addColorStop(1.0, "rgba(120,255,255,0.0)");
-  g.fillStyle = grd;
-  g.fillRect(0, 0, 128, 128);
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
-  const spr = new THREE.Sprite(mat);
-  spr.scale.set(2.4, 2.4, 1);
-  return spr;
-}
-
-const ballGlow = createGlowSprite();
-player.add(ballGlow);
-ballGlow.position.set(0, 0.15, 0);
-
-function updateBallFX(t, speed01) {
-  playerMat.emissiveIntensity = 0.45 + speed01 * 1.0 + Math.sin(t * 6.0) * 0.05;
-  const s = 2.0 + speed01 * 1.2;
-  ballGlow.scale.set(s, s, 1);
-}
 
 /* =========================
-   LEVEL OBJECTS
+   GEOMETRIES
 ========================= */
+const wallGeo = new THREE.BoxGeometry(CONFIG.wallSize, CONFIG.wallHeight, CONFIG.wallSize);
+const playerGeo = new THREE.SphereGeometry(CONFIG.playerRadius, 32, 32);
+const goalGeo = new THREE.CylinderGeometry(0.4, 0.45, 1.1, 32);
+
+/* =========================
+   WORLD OBJECTS
+========================= */
+let MAZE = [];
+let mazeRows = 0, mazeCols = 0;
+let worldW = 0, worldD = 0;
+const WORLD_CENTER = new THREE.Vector3();
+
 let ground = null;
 let wallsInst = null;
+let wallBoxes = [];
 let goal = null;
 
-let wallBoxes = [];
-let MAZE = null;
-let mazeRows = 0;
-let mazeCols = 0;
-let worldW = 0;
-let worldD = 0;
-let WORLD_CENTER = new THREE.Vector3(0, 0, 0);
-let startPos = new THREE.Vector3(0, 0, 0);
-let goalPos = new THREE.Vector3(0, 0, 0);
-
-const wallGeo = new THREE.BoxGeometry(CONFIG.wallSize, CONFIG.wallHeight, CONFIG.wallSize);
-const goalGeo = new THREE.BoxGeometry(1.0, 1.0, 1.0);
+let startPos = new THREE.Vector3();
+let goalPos = new THREE.Vector3();
 
 /* =========================
-   EFFECTS (win burst)
+   PLAYER
 ========================= */
-const activeBursts = [];
-function spawnWinBurst(pos) {
-  const count = 90;
-  const geom = new THREE.BufferGeometry();
-  const positions = new Float32Array(count * 3);
-  const velocities = new Float32Array(count * 3);
+const player = new THREE.Mesh(playerGeo, playerMat);
+player.castShadow = true;
+player.receiveShadow = false;
+scene.add(player);
 
-  for (let i = 0; i < count; i++) {
-    const i3 = i * 3;
-    positions[i3 + 0] = pos.x;
-    positions[i3 + 1] = pos.y + 0.6;
-    positions[i3 + 2] = pos.z;
+const playerVel = new THREE.Vector3(0, 0, 0);
 
-    const a = Math.random() * Math.PI * 2;
-    const s = 1.2 + Math.random() * 2.0;
-    velocities[i3 + 0] = Math.cos(a) * s;
-    velocities[i3 + 1] = 2.2 + Math.random() * 2.0;
-    velocities[i3 + 2] = Math.sin(a) * s;
+// Player glow effect
+const playerGlow = new THREE.PointLight(0x6366f1, 2.0, 5);
+playerGlow.castShadow = false;
+player.add(playerGlow);
+
+/* =========================
+   PARTICLE SYSTEM (NEW)
+========================= */
+class ParticleSystem {
+  constructor() {
+    this.particles = [];
+    this.geometry = new THREE.BufferGeometry();
+    this.material = new THREE.PointsMaterial({
+      color: 0x818cf8,
+      size: 0.12,
+      transparent: true,
+      opacity: 0.8,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.points = new THREE.Points(this.geometry, this.material);
+    scene.add(this.points);
   }
 
-  geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.PointsMaterial({ size: 0.12 });
-  const points = new THREE.Points(geom, mat);
-  scene.add(points);
+  addParticle(pos, vel, life = 1.0) {
+    this.particles.push({
+      pos: pos.clone(),
+      vel: vel.clone(),
+      life: life,
+      maxLife: life,
+    });
+  }
 
-  activeBursts.push({ points, positions, velocities, life: 0.9 });
+  update(dt) {
+    this.particles = this.particles.filter(p => {
+      p.life -= dt;
+      if (p.life <= 0) return false;
+
+      p.vel.y -= 2.0 * dt;
+      p.pos.add(p.vel.clone().multiplyScalar(dt));
+      return true;
+    });
+
+    const positions = new Float32Array(this.particles.length * 3);
+    this.particles.forEach((p, i) => {
+      positions[i * 3] = p.pos.x;
+      positions[i * 3 + 1] = p.pos.y;
+      positions[i * 3 + 2] = p.pos.z;
+    });
+
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.material.opacity = 0.7;
+  }
+}
+
+const particleSystem = new ParticleSystem();
+
+/* =========================
+   TRAIL EFFECT (NEW)
+========================= */
+const trailPoints = [];
+const trailGeometry = new THREE.BufferGeometry();
+const trailMaterial = new THREE.LineBasicMaterial({
+  color: 0x818cf8,
+  transparent: true,
+  opacity: 0.4,
+  blending: THREE.AdditiveBlending,
+});
+const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+scene.add(trailLine);
+
+function updateTrail() {
+  if (!CONFIG.trailEffect) return;
+  
+  trailPoints.push(player.position.clone());
+  if (trailPoints.length > 30) trailPoints.shift();
+
+  const positions = new Float32Array(trailPoints.length * 3);
+  trailPoints.forEach((p, i) => {
+    positions[i * 3] = p.x;
+    positions[i * 3 + 1] = p.y;
+    positions[i * 3 + 2] = p.z;
+  });
+
+  trailGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+}
+
+/* =========================
+   WIN BURST PARTICLES (ENHANCED)
+========================= */
+const burstParticles = [];
+
+function spawnWinBurst(pos) {
+  const count = 60;
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    const speed = 3 + Math.random() * 2;
+    const vx = Math.cos(angle) * speed;
+    const vz = Math.sin(angle) * speed;
+    const vy = 2 + Math.random() * 3;
+
+    const geo = new THREE.SphereGeometry(0.08 + Math.random() * 0.06, 8, 8);
+    const mat = new THREE.MeshStandardMaterial({
+      color: Math.random() > 0.5 ? 0xfbbf24 : 0x6366f1,
+      emissive: Math.random() > 0.5 ? 0xf59e0b : 0x4f46e5,
+      emissiveIntensity: 2.0,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    scene.add(mesh);
+
+    burstParticles.push({
+      mesh,
+      vel: new THREE.Vector3(vx, vy, vz),
+      life: 1.5 + Math.random() * 0.5,
+    });
+  }
 }
 
 function updateBursts(dt) {
-  for (let i = activeBursts.length - 1; i >= 0; i--) {
-    const b = activeBursts[i];
-    b.life -= dt;
-    const p = b.positions;
-    const v = b.velocities;
-
-    for (let j = 0; j < p.length; j += 3) {
-      v[j + 1] -= 9.8 * dt;
-      p[j + 0] += v[j + 0] * dt;
-      p[j + 1] += v[j + 1] * dt;
-      p[j + 2] += v[j + 2] * dt;
+  for (let i = burstParticles.length - 1; i >= 0; i--) {
+    const p = burstParticles[i];
+    p.life -= dt;
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      p.mesh.material.dispose();
+      burstParticles.splice(i, 1);
+      continue;
     }
 
-    b.points.geometry.attributes.position.needsUpdate = true;
-    b.points.material.opacity = clamp(b.life / 0.9, 0, 1);
-    b.points.material.transparent = true;
+    p.vel.y -= 9.8 * dt;
+    p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
 
-    if (b.life <= 0) {
-      scene.remove(b.points);
-      b.points.geometry.dispose();
-      b.points.material.dispose();
-      activeBursts.splice(i, 1);
-    }
+    const alpha = clamp(p.life / 0.5, 0, 1);
+    p.mesh.material.opacity = alpha;
+    p.mesh.material.transparent = true;
   }
 }
 
 /* =========================
    COLLISION
 ========================= */
-const tmpClosest = new THREE.Vector3();
-const tmpDelta = new THREE.Vector3();
-
-function resolveSphereAABBCollisions(center, radius) {
-  let hit = false;
-
-  for (let i = 0; i < wallBoxes.length; i++) {
-    const b = wallBoxes[i];
-
-    tmpClosest.set(
-      clamp(center.x, b.min.x, b.max.x),
-      clamp(center.y, b.min.y, b.max.y),
-      clamp(center.z, b.min.z, b.max.z)
+function resolveSphereAABBCollisions(pos, rad) {
+  let hitAny = false;
+  for (let box of wallBoxes) {
+    const closest = new THREE.Vector3(
+      clamp(pos.x, box.min.x, box.max.x),
+      clamp(pos.y, box.min.y, box.max.y),
+      clamp(pos.z, box.min.z, box.max.z)
     );
 
-    tmpDelta.subVectors(center, tmpClosest);
-    const distSq = tmpDelta.lengthSq();
-    const rSq = radius * radius;
-
-    if (distSq < rSq) {
-      hit = true;
-
-      let dist = Math.sqrt(distSq);
-      if (dist < 1e-6) {
-        const dxMin = Math.abs(center.x - b.min.x);
-        const dxMax = Math.abs(b.max.x - center.x);
-        const dzMin = Math.abs(center.z - b.min.z);
-        const dzMax = Math.abs(b.max.z - center.z);
-
-        const minPen = Math.min(dxMin, dxMax, dzMin, dzMax);
-
-        if (minPen === dxMin) center.x = b.min.x - radius;
-        else if (minPen === dxMax) center.x = b.max.x + radius;
-        else if (minPen === dzMin) center.z = b.min.z - radius;
-        else center.z = b.max.z + radius;
-
-        continue;
-      }
-
-      const push = (radius - dist);
-      tmpDelta.multiplyScalar(1 / dist);
-      center.addScaledVector(tmpDelta, push);
+    const dist = pos.distanceTo(closest);
+    if (dist < rad) {
+      const pushDir = pos.clone().sub(closest);
+      if (pushDir.lengthSq() < 0.0001) pushDir.set(0, 0, 1);
+      pushDir.normalize();
+      pos.add(pushDir.multiplyScalar(rad - dist + 0.01));
+      hitAny = true;
     }
   }
-
-  return hit;
+  return hitAny;
 }
 
 /* =========================
-   MOVEMENT (camera-relative)
+   CAMERAS
 ========================= */
-const camDir = new THREE.Vector3();
+const topCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
+const fpsCamera = new THREE.PerspectiveCamera(CONFIG.fpsFov, window.innerWidth / window.innerHeight, 0.1, 100);
+
+let activeCamera = topCamera;
+let isFPS = false;
+
+let yaw = 0, pitch = 0;
+let lookActive = false;
+
 const camForward = new THREE.Vector3();
 const camRight = new THREE.Vector3();
-const worldUp = new THREE.Vector3(0, 1, 0);
 
 function computeMoveBasis(cam) {
-  cam.getWorldDirection(camDir);
-
-  camForward.set(camDir.x, 0, camDir.z);
-  if (camForward.lengthSq() < 1e-6) camForward.set(0, 0, -1);
+  cam.getWorldDirection(camForward);
+  camForward.y = 0;
+  if (camForward.lengthSq() < 0.0001) camForward.set(0, 0, -1);
   camForward.normalize();
-
-  camRight.crossVectors(camForward, worldUp);
-  if (camRight.lengthSq() < 1e-6) camRight.set(1, 0, 0);
-  camRight.normalize();
+  camRight.crossVectors(new THREE.Vector3(0, 1, 0), camForward).normalize();
 }
 
+/* =========================
+   CAMERA SHAKE (NEW)
+========================= */
+let shakeIntensity = 0;
+let shakeTime = 0;
+
+function addCameraShake(intensity = 0.3, duration = 0.3) {
+  if (!CONFIG.cameraShake) return;
+  shakeIntensity = Math.max(shakeIntensity, intensity);
+  shakeTime = duration;
+}
+
+function updateCameraShake(dt) {
+  if (shakeTime > 0) {
+    shakeTime -= dt;
+    const shake = shakeIntensity * (shakeTime / 0.3);
+    activeCamera.position.x += (Math.random() - 0.5) * shake * 0.1;
+    activeCamera.position.y += (Math.random() - 0.5) * shake * 0.1;
+  }
+}
+
+/* =========================
+   FPS CAMERA + MOUSE
+========================= */
 function updateFpsCamera() {
-  fpsCamera.position.set(player.position.x, CONFIG.playerY + CONFIG.fpsEyeHeight, player.position.z);
-  fpsCamera.rotation.order = "YXZ";
-  fpsCamera.rotation.y = yaw;
-  fpsCamera.rotation.x = pitch;
+  const offset = new THREE.Vector3(
+    Math.sin(yaw) * 0.01,
+    CONFIG.fpsEyeHeight,
+    Math.cos(yaw) * 0.01
+  );
+  fpsCamera.position.copy(player.position).add(offset);
+
+  const lookDir = new THREE.Vector3(
+    Math.sin(yaw) * Math.cos(pitch),
+    Math.sin(pitch),
+    Math.cos(yaw) * Math.cos(pitch)
+  );
+  fpsCamera.lookAt(fpsCamera.position.clone().add(lookDir));
 }
 
+renderer.domElement.addEventListener("click", () => {
+  if (!isFPS) return;
+  renderer.domElement.requestPointerLock();
+});
+
+document.addEventListener("pointerlockchange", () => {
+  lookActive = (document.pointerLockElement === renderer.domElement);
+});
+
+renderer.domElement.addEventListener("mousemove", (e) => {
+  if (!lookActive || !isFPS) return;
+
+  const sensitivity = 0.002;
+  yaw -= e.movementX * sensitivity;
+  pitch -= e.movementY * sensitivity;
+  pitch = clamp(pitch, -CONFIG.fpsPitchLimit, CONFIG.fpsPitchLimit);
+});
+
+/* =========================
+   TOP CAMERA
+========================= */
 function setStaticTopCamera() {
   topCamera.position.set(WORLD_CENTER.x, CONFIG.topCamHeight, WORLD_CENTER.z);
-  topCamera.up.set(0, 0, -1);
   topCamera.lookAt(WORLD_CENTER.x, 0, WORLD_CENTER.z);
+  topCamera.up.set(0, 0, -1);
 }
 
 function fitTopOrthoCamera() {
+  const halfMazeW = worldW * 0.5 * CONFIG.orthoPadding;
+  const halfMazeD = worldD * 0.5 * CONFIG.orthoPadding;
+
   const aspect = window.innerWidth / window.innerHeight;
-
-  const halfMazeW = (worldW * 0.5) * CONFIG.orthoPadding;
-  const halfMazeD = (worldD * 0.5) * CONFIG.orthoPadding;
-
-  const mazeAspect = halfMazeW / halfMazeD;
+  const mazeAspect = worldW / worldD;
 
   let halfW, halfH;
   if (aspect >= mazeAspect) {
@@ -795,7 +797,11 @@ function disposeLevelObjects() {
     goal = null;
   }
   wallBoxes = [];
+  trailPoints.length = 0;
 }
+
+let hasWon = false;
+let levelTransitioning = false;
 
 function rebuildLevel(level) {
   disposeLevelObjects();
@@ -824,7 +830,7 @@ function rebuildLevel(level) {
   ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI * 0.5;
   ground.position.set(WORLD_CENTER.x, 0, WORLD_CENTER.z);
-  groundMat.map.repeat.set(Math.max(1, worldW / 6), Math.max(1, worldD / 6));
+  ground.receiveShadow = true;
   scene.add(ground);
 
   // Walls instanced
@@ -833,6 +839,8 @@ function rebuildLevel(level) {
 
   wallsInst = new THREE.InstancedMesh(wallGeo, wallMat, count);
   wallsInst.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  wallsInst.castShadow = true;
+  wallsInst.receiveShadow = true;
   scene.add(wallsInst);
 
   const m = new THREE.Matrix4();
@@ -862,17 +870,23 @@ function rebuildLevel(level) {
   }
   wallsInst.instanceMatrix.needsUpdate = true;
 
-  // Goal
+  // Goal (enhanced)
   const goalMat = new THREE.MeshStandardMaterial({
-    color: 0xffd36a,
-    emissive: 0xff9b2f,
-    emissiveIntensity: 1.1,
-    roughness: 0.35,
-    metalness: 0.0,
+    color: 0xfbbf24,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 1.5,
+    roughness: 0.2,
+    metalness: 0.2,
   });
   goal = new THREE.Mesh(goalGeo, goalMat);
   goal.position.set(goalPos.x, 0.55, goalPos.z);
+  goal.castShadow = true;
   scene.add(goal);
+
+  // Goal glow
+  const goalGlow = new THREE.PointLight(0xfbbf24, 3.0, 8);
+  goalGlow.position.set(goalPos.x, 1.2, goalPos.z);
+  scene.add(goalGlow);
 
   // Reset player
   player.position.set(startPos.x, CONFIG.playerY, startPos.z);
@@ -913,21 +927,36 @@ function showWin() {
   if (ui.status) ui.status.textContent = "Win!";
   AudioFX.win();
   if (goal) spawnWinBurst(goal.position);
+  addCameraShake(0.5, 0.5);
 }
 
 function hideWin() {
   ui.winOverlay?.classList.add("hidden");
 }
 
+ui.restartBtn?.addEventListener("click", () => {
+  AudioFX.click();
+  hideWin();
+  LevelManager.restart();
+  Game.loadLevel(LevelManager.getLevel());
+});
+
+ui.nextBtn?.addEventListener("click", () => {
+  AudioFX.click();
+  hideWin();
+  LevelManager.nextLevel();
+  Game.loadLevel(LevelManager.getLevel());
+});
+
 /* =========================
-   MOVE (smooth) + SFX
+   MOVE (smooth) + SFX + FX
 ========================= */
 function movePlayer(dt, t) {
   let f = 0, s = 0;
   if (input.up) f += 1;
   if (input.down) f -= 1;
-  if (input.right) s += 1;
-  if (input.left) s -= 1;
+  if (input.left) s += 1;
+  if (input.right) s -= 1;
 
   const len = Math.hypot(f, s);
   computeMoveBasis(activeCamera);
@@ -968,6 +997,7 @@ function movePlayer(dt, t) {
     AudioFX.bump();
     playerVel.x *= 0.35;
     playerVel.z *= 0.35;
+    addCameraShake(0.15, 0.15);
   }
 
   player.position.copy(next);
@@ -979,10 +1009,27 @@ function movePlayer(dt, t) {
     const dist = speed * dt;
     const roll = dist / CONFIG.playerRadius;
     player.rotateX(roll);
+
+    // Add trail particles
+    if (CONFIG.trailEffect && Math.random() < 0.3) {
+      const offset = new THREE.Vector3(
+        (Math.random() - 0.5) * 0.3,
+        (Math.random() - 0.5) * 0.2,
+        (Math.random() - 0.5) * 0.3
+      );
+      particleSystem.addParticle(
+        player.position.clone().add(offset),
+        new THREE.Vector3(0, 0.5, 0),
+        0.5
+      );
+    }
   }
 
+  // Update player glow
   const speed01 = clamp(speed / CONFIG.moveMaxSpeed, 0, 1);
-  updateBallFX(t, speed01);
+  playerGlow.intensity = 1.2 + speed01 * 1.0;
+
+  updateTrail();
 
   return speed > 0.05;
 }
@@ -1004,7 +1051,6 @@ function loop(nowMs) {
 
     if (goal && player.position.distanceTo(goal.position) <= CONFIG.winDistance) {
       showWin();
-      
     }
   } else {
     AudioFX.stopSteps();
@@ -1012,8 +1058,16 @@ function loop(nowMs) {
 
   AudioFX.update(dt);
   updateBursts(dt);
+  particleSystem.update(dt);
+  updateCameraShake(dt);
 
-  if (goal) goal.rotation.y += dt * 1.3;
+  if (goal) {
+    goal.rotation.y += dt * 1.5;
+    // Pulsing effect
+    const pulse = 1.0 + Math.sin(t * 3) * 0.05;
+    goal.scale.set(pulse, pulse, pulse);
+  }
+
   if (isFPS) updateFpsCamera();
 
   renderer.render(scene, activeCamera);
