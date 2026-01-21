@@ -1127,7 +1127,7 @@ function rebuildLevel(level) {
   // UI
   hasWon = false;
   hideWin();
-  if (ui.status) ui.status.textContent = "Reach the goal! (Press C to toggle camera)";
+  if (ui.status) ui.status.textContent = "Reach the goal! (Press C/CAM to toggle camera)";
   LevelManager.updateUI?.();
   setHudMode();
 }
