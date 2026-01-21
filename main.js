@@ -351,21 +351,76 @@ const LevelManager = (() => {
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.maxPixelRatio));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.physicallyCorrectLights = true;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.35;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1f35);
+const TOP_BG_COLOR = new THREE.Color(0x1a2332);
 
-// Enhanced ambient light
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+// Simple skybox (no external assets): canvas gradient + subtle stars.
+// We only show it in FPS mode so top-down stays super clear.
+function createSkyTexture() {
+  const w = 1024;
+  const h = 512;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d");
+
+  // Vertical gradient sky
+  const grd = g.createLinearGradient(0, 0, 0, h);
+  grd.addColorStop(0.0, "#0b1220");
+  grd.addColorStop(0.55, "#101b2f");
+  grd.addColorStop(1.0, "#1a2b45");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, w, h);
+
+  // Subtle stars (kept very low contrast)
+  const starCount = 350;
+  for (let i = 0; i < starCount; i++) {
+    const x = Math.random() * w;
+    const y = Math.random() * (h * 0.65);
+    const r = Math.random() < 0.85 ? 0.7 : 1.2;
+    const a = 0.05 + Math.random() * 0.12;
+    g.fillStyle = `rgba(255,255,255,${a})`;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // Slight vignette to keep focus toward center
+  const vg = g.createRadialGradient(w * 0.5, h * 0.55, h * 0.2, w * 0.5, h * 0.55, h * 0.85);
+  vg.addColorStop(0.0, "rgba(0,0,0,0.0)");
+  vg.addColorStop(1.0, "rgba(0,0,0,0.35)");
+  g.fillStyle = vg;
+  g.fillRect(0, 0, w, h);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+const SKY_TEX = createSkyTexture();
+scene.background = TOP_BG_COLOR;
+
+// Enhanced ambient light (lift dark areas without fog)
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
 scene.add(ambientLight);
 
+// Hemisphere fill light keeps corners readable and reduces harsh contrast
+const hemiLight = new THREE.HemisphereLight(0x93c5fd, 0x0b1020, 0.35);
+scene.add(hemiLight);
+
 // Main directional light with shadows
-const mainLight = new THREE.DirectionalLight(0xffffff, 1.8);
+const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
 mainLight.position.set(8, 16, 8);
 mainLight.castShadow = true;
 mainLight.shadow.camera.left = -25;
@@ -376,15 +431,29 @@ mainLight.shadow.camera.near = 0.1;
 mainLight.shadow.camera.far = 50;
 mainLight.shadow.mapSize.width = 2048;
 mainLight.shadow.mapSize.height = 2048;
-mainLight.shadow.bias = -0.0001;
+// Softer / more stable shadows (reduce acne + edge shimmer)
+mainLight.shadow.bias = -0.0002;
+mainLight.shadow.normalBias = 0.02;
+mainLight.shadow.radius = 2;
 scene.add(mainLight);
 
+// Mobile perf: smaller shadow maps
+if (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) {
+  mainLight.shadow.mapSize.width = 1024;
+  mainLight.shadow.mapSize.height = 1024;
+}
+
+// Fill light to soften shadows
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+fillLight.position.set(-8, 10, -8);
+scene.add(fillLight);
+
 // Accent lights for atmosphere
-const accentLight1 = new THREE.PointLight(0x6366f1, 1.2, 40);
+const accentLight1 = new THREE.PointLight(0x818cf8, 1.0, 40);
 accentLight1.position.set(-10, 10, -10);
 scene.add(accentLight1);
 
-const accentLight2 = new THREE.PointLight(0xf472b6, 0.8, 35);
+const accentLight2 = new THREE.PointLight(0xfbbf24, 0.8, 35);
 accentLight2.position.set(10, 8, 10);
 scene.add(accentLight2);
 
@@ -393,18 +462,67 @@ scene.add(accentLight2);
 ========================= */
 const textureLoader = new THREE.TextureLoader();
 
+function makeNoiseCanvas(size, baseHex = "#2a3446", lineHex = "#344155") {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d");
+
+  g.fillStyle = baseHex;
+  g.fillRect(0, 0, size, size);
+
+  // Subtle grain
+  const img = g.getImageData(0, 0, size, size);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const n = (Math.random() - 0.5) * 14;
+    d[i] = clamp(d[i] + n, 0, 255);
+    d[i + 1] = clamp(d[i + 1] + n, 0, 255);
+    d[i + 2] = clamp(d[i + 2] + n, 0, 255);
+    d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+
+  // Soft panel-ish lines
+  g.strokeStyle = lineHex;
+  g.lineWidth = 2;
+  const step = size / 8;
+  for (let i = 0; i <= size; i += step) {
+    g.beginPath();
+    g.moveTo(i, 0);
+    g.lineTo(i, size);
+    g.stroke();
+  }
+
+  return c;
+}
+
+function makeAOCanvas(size) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d");
+
+  // Edge darkening to fake ambient occlusion
+  const grd = g.createRadialGradient(size * 0.5, size * 0.5, size * 0.08, size * 0.5, size * 0.5, size * 0.72);
+  grd.addColorStop(0, "rgba(255,255,255,1.0)");
+  grd.addColorStop(0.65, "rgba(220,220,220,1.0)");
+  grd.addColorStop(1, "rgba(140,140,140,1.0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, size, size);
+  return c;
+}
+
 // Ground with grid texture
 const groundCanvas = document.createElement('canvas');
 groundCanvas.width = 512;
 groundCanvas.height = 512;
 const groundCtx = groundCanvas.getContext('2d');
 
-// Base color
-groundCtx.fillStyle = '#1e293b';
+// Darker base color for contrast
+groundCtx.fillStyle = '#1e2938';
 groundCtx.fillRect(0, 0, 512, 512);
 
 // Grid lines
-groundCtx.strokeStyle = '#334155';
+groundCtx.strokeStyle = '#374151';
 groundCtx.lineWidth = 2;
 const gridSize = 32;
 for (let i = 0; i <= 512; i += gridSize) {
@@ -422,35 +540,72 @@ for (let i = 0; i <= 512; i += gridSize) {
 const groundTexture = new THREE.CanvasTexture(groundCanvas);
 groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
 
+const aoTexture = new THREE.CanvasTexture(makeAOCanvas(256));
+aoTexture.wrapS = aoTexture.wrapT = THREE.RepeatWrapping;
+aoTexture.repeat.set(1, 1);
+
 const groundMat = new THREE.MeshStandardMaterial({
   map: groundTexture,
+  aoMap: aoTexture,
+  aoMapIntensity: 0.45,
   roughness: 0.9,
   metalness: 0.0,
 });
 
 // Walls with enhanced look
+const wallTexture = new THREE.CanvasTexture(makeNoiseCanvas(256, "#2b3a52", "#33445e"));
+wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
+wallTexture.repeat.set(1, 1);
+
 const wallMat = new THREE.MeshStandardMaterial({
-  color: 0x475569,
+  // Slightly brighter + tiny emissive so walls don't crush to black
+  color: 0x556b8a,
+  map: wallTexture,
+  aoMap: aoTexture,
+  aoMapIntensity: 0.55,
   roughness: 0.7,
-  metalness: 0.2,
-  envMapIntensity: 0.5,
+  metalness: 0.12,
+  emissive: 0x0b1220,
+  emissiveIntensity: 0.16,
+  envMapIntensity: 0.35,
+});
+
+// Wall top edge highlight material
+const wallTopMat = new THREE.MeshStandardMaterial({
+  color: 0x5a6c89,
+  emissive: 0x5a6c89,
+  emissiveIntensity: 0.2,
+  map: wallTexture,
+  aoMap: aoTexture,
+  aoMapIntensity: 0.65,
+  roughness: 0.6,
+  metalness: 0.3,
+  // Extra insurance against z-fighting shimmering on edges
+  polygonOffset: true,
+  polygonOffsetFactor: -1,
+  polygonOffsetUnits: -1,
 });
 
 // Player ball with vibrant materials
 const playerMat = new THREE.MeshStandardMaterial({
-  color: 0x6366f1,
-  emissive: 0x4f46e5,
-  emissiveIntensity: 0.6,
-  roughness: 0.2,
-  metalness: 0.3,
+  color: 0x818cf8,
+  emissive: 0x6366f1,
+  emissiveIntensity: 0.8,
+  roughness: 0.15,
+  metalness: 0.4,
 });
 
 /* =========================
    GEOMETRIES
 ========================= */
 const wallGeo = new THREE.BoxGeometry(CONFIG.wallSize, CONFIG.wallHeight, CONFIG.wallSize);
+const wallTopGeo = new THREE.BoxGeometry(CONFIG.wallSize, 0.08, CONFIG.wallSize);
 const playerGeo = new THREE.SphereGeometry(CONFIG.playerRadius, 32, 32);
 const goalGeo = new THREE.CylinderGeometry(0.4, 0.45, 1.1, 32);
+
+// Enable aoMap support
+wallGeo.setAttribute("uv2", new THREE.BufferAttribute(wallGeo.attributes.uv.array, 2));
+wallTopGeo.setAttribute("uv2", new THREE.BufferAttribute(wallTopGeo.attributes.uv.array, 2));
 
 /* =========================
    WORLD OBJECTS
@@ -462,6 +617,7 @@ const WORLD_CENTER = new THREE.Vector3();
 
 let ground = null;
 let wallsInst = null;
+let wallTopsInst = null;
 let wallBoxes = [];
 let goal = null;
 
@@ -477,9 +633,10 @@ player.receiveShadow = false;
 scene.add(player);
 
 const playerVel = new THREE.Vector3(0, 0, 0);
+let lastMoveSpeed = 0;
 
 // Player glow effect
-const playerGlow = new THREE.PointLight(0x6366f1, 2.0, 5);
+const playerGlow = new THREE.PointLight(0x818cf8, 2.0, 5);
 playerGlow.castShadow = false;
 player.add(playerGlow);
 
@@ -690,9 +847,15 @@ function updateCameraShake(dt) {
    FPS CAMERA + MOUSE
 ========================= */
 function updateFpsCamera() {
+  const speed01 = clamp(lastMoveSpeed / CONFIG.moveMaxSpeed, 0, 1);
+  // Cheap head bob (no fog/post)
+  const bobFreq = 8.5;
+  const bobAmp = 0.06;
+  const bob = Math.sin(performance.now() * 0.001 * bobFreq) * bobAmp * speed01;
+
   const offset = new THREE.Vector3(
     Math.sin(yaw) * 0.01,
-    CONFIG.fpsEyeHeight,
+    CONFIG.fpsEyeHeight + bob,
     Math.cos(yaw) * 0.01
   );
   fpsCamera.position.copy(player.position).add(offset);
@@ -721,6 +884,44 @@ renderer.domElement.addEventListener("mousemove", (e) => {
   yaw -= e.movementX * sensitivity;
   pitch -= e.movementY * sensitivity;
   pitch = clamp(pitch, -CONFIG.fpsPitchLimit, CONFIG.fpsPitchLimit);
+});
+
+// MOBILE TOUCH LOOK CONTROLS
+let touchStartX = 0;
+let touchStartY = 0;
+let touchLookActive = false;
+
+renderer.domElement.addEventListener("touchstart", (e) => {
+  if (!isFPS) return;
+  if (e.touches.length === 1) {
+    touchLookActive = true;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }
+}, { passive: true });
+
+renderer.domElement.addEventListener("touchmove", (e) => {
+  if (!isFPS || !touchLookActive) return;
+  if (e.touches.length === 1) {
+    const sensitivity = 0.003;
+    const deltaX = e.touches[0].clientX - touchStartX;
+    const deltaY = e.touches[0].clientY - touchStartY;
+    
+    yaw -= deltaX * sensitivity;
+    pitch -= deltaY * sensitivity;
+    pitch = clamp(pitch, -CONFIG.fpsPitchLimit, CONFIG.fpsPitchLimit);
+    
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }
+}, { passive: true });
+
+renderer.domElement.addEventListener("touchend", () => {
+  touchLookActive = false;
+});
+
+renderer.domElement.addEventListener("touchcancel", () => {
+  touchLookActive = false;
 });
 
 /* =========================
@@ -766,6 +967,9 @@ function toggleCameraMode() {
   isFPS = !isFPS;
   activeCamera = isFPS ? fpsCamera : topCamera;
 
+  // Skybox only in FPS mode
+  scene.background = isFPS ? SKY_TEX : TOP_BG_COLOR;
+
   if (isFPS) {
     yaw = player.rotation.y;
     pitch = 0;
@@ -790,6 +994,10 @@ function disposeLevelObjects() {
   if (wallsInst) {
     scene.remove(wallsInst);
     wallsInst = null;
+  }
+  if (wallTopsInst) {
+    scene.remove(wallTopsInst);
+    wallTopsInst = null;
   }
   if (goal) {
     scene.remove(goal);
@@ -827,6 +1035,7 @@ function rebuildLevel(level) {
 
   // Ground
   const groundGeo = new THREE.PlaneGeometry(worldW, worldD);
+  groundGeo.setAttribute("uv2", new THREE.BufferAttribute(groundGeo.attributes.uv.array, 2));
   ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI * 0.5;
   ground.position.set(WORLD_CENTER.x, 0, WORLD_CENTER.z);
@@ -843,8 +1052,17 @@ function rebuildLevel(level) {
   wallsInst.receiveShadow = true;
   scene.add(wallsInst);
 
+  // Wall tops for edge highlighting
+  wallTopsInst = new THREE.InstancedMesh(wallTopGeo, wallTopMat, count);
+  wallTopsInst.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  wallTopsInst.castShadow = false;
+  wallTopsInst.receiveShadow = false;
+  scene.add(wallTopsInst);
+
   const m = new THREE.Matrix4();
+  const mTop = new THREE.Matrix4();
   const pos = new THREE.Vector3();
+  const posTop = new THREE.Vector3();
   const half = new THREE.Vector3(CONFIG.wallSize * 0.5, CONFIG.wallHeight * 0.5, CONFIG.wallSize * 0.5);
 
   let idx = 0;
@@ -854,9 +1072,14 @@ function rebuildLevel(level) {
 
       const p = gridToWorldLocal(r, c);
       pos.set(p.x, CONFIG.wallHeight * 0.5, p.z);
+      // Place the top cap slightly ABOVE the wall to avoid z-fighting flicker
+      posTop.set(p.x, CONFIG.wallHeight + 0.04 + 0.002, p.z);
 
       m.makeTranslation(pos.x, pos.y, pos.z);
       wallsInst.setMatrixAt(idx, m);
+
+      mTop.makeTranslation(posTop.x, posTop.y, posTop.z);
+      wallTopsInst.setMatrixAt(idx, mTop);
 
       wallBoxes.push(
         new THREE.Box3(
@@ -869,14 +1092,15 @@ function rebuildLevel(level) {
     }
   }
   wallsInst.instanceMatrix.needsUpdate = true;
+  wallTopsInst.instanceMatrix.needsUpdate = true;
 
   // Goal (enhanced)
   const goalMat = new THREE.MeshStandardMaterial({
-    color: 0xfbbf24,
-    emissive: 0xf59e0b,
-    emissiveIntensity: 1.5,
+    color: 0xfde047,
+    emissive: 0xfbbf24,
+    emissiveIntensity: 1.6,
     roughness: 0.2,
-    metalness: 0.2,
+    metalness: 0.3,
   });
   goal = new THREE.Mesh(goalGeo, goalMat);
   goal.position.set(goalPos.x, 0.55, goalPos.z);
@@ -884,7 +1108,7 @@ function rebuildLevel(level) {
   scene.add(goal);
 
   // Goal glow
-  const goalGlow = new THREE.PointLight(0xfbbf24, 3.0, 8);
+  const goalGlow = new THREE.PointLight(0xfde047, 2.8, 8);
   goalGlow.position.set(goalPos.x, 1.2, goalPos.z);
   scene.add(goalGlow);
 
@@ -1003,6 +1227,7 @@ function movePlayer(dt, t) {
   player.position.copy(next);
 
   const speed = Math.hypot(playerVel.x, playerVel.z);
+  lastMoveSpeed = speed;
   if (speed > 0.05) {
     player.rotation.y = Math.atan2(playerVel.x, -playerVel.z);
 

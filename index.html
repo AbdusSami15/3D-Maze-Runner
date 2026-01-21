@@ -11,18 +11,17 @@
   <div id="hud">
     <div id="status">Reach the goal! (Press C to toggle camera)</div>
     <div id="mode">Mode: Top-Down</div>
-    <div id="levelText" class="levelPill">Level 1</div>
-    <div id="hint">FPS: Click to lock mouse • ESC to unlock</div>
+    <div id="levelText" class="levelPill">LEVEL 1  |  BEST 1</div>
+    <div id="hint">Tip: Press C to toggle camera</div>
   </div>
 
-  <!-- Crosshair (optional) -->
+  <!-- Crosshair -->
   <div id="crosshair" class="hidden">+</div>
 
-  <!-- WIN OVERLAY -->
+  <!-- Win Overlay -->
   <div id="winOverlay" class="overlay hidden">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="winTitle">
       <div class="cardTopGlow"></div>
-
       <div class="cardBody">
         <div class="tag">Level Complete</div>
         <h1 id="winTitle" class="title">You Win</h1>
@@ -32,6 +31,8 @@
           <button id="restartBtn" class="btn btnSecondary" type="button">Restart</button>
           <button id="nextBtn" class="btn btnPrimary" type="button">Next Level</button>
         </div>
+
+        <div class="kbdHint">Keyboard: R = Restart • C = Camera</div>
       </div>
     </div>
   </div>
