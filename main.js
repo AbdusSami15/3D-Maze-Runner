@@ -11,11 +11,11 @@ const CONFIG = {
   playerRadius: 0.45,
   playerY: 0.45,
 
-  // Movement feel
-  moveMaxSpeed: 4.0,
-  moveAccel: 18.0,
-  moveDecel: 22.0,
-  moveTurnBoost: 10.0,
+  // Movement feel (FASTER)
+  moveMaxSpeed: 7.0,   // was 4.0
+  moveAccel: 30.0,     // was 18.0
+  moveDecel: 26.0,     // was 22.0
+  moveTurnBoost: 12.0, // was 10.0
 
   // Top cam
   topCamHeight: 40,
@@ -41,9 +41,6 @@ const CONFIG = {
   audioEnabled: true,
   stepIntervalMs: 220,
   bumpCooldownMs: 120,
-
-  // Visual
-  fogDensity: 0.035,
 };
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
@@ -206,6 +203,7 @@ window.addEventListener("keydown", () => AudioFX.userGestureUnlock(), { once: tr
 
 /* =========================
    LEVEL SYSTEM + GENERATOR
+   (UNCHANGED)
 ========================= */
 function generateMaze(level) {
   const size = makeOdd(CONFIG.baseMazeOddSize + (level - 1) * CONFIG.sizeGrowEveryLevel);
@@ -322,28 +320,39 @@ ui.restartBtn?.addEventListener("click", () => LevelManager.restartLevel());
 ui.nextBtn?.addEventListener("click", () => LevelManager.nextLevel());
 
 /* =========================
-   THREE SCENE (PRO BG)
+   THREE SCENE (BRIGHT, NO FOG)
 ========================= */
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x070b12);
-scene.fog = new THREE.FogExp2(0x070b12, CONFIG.fogDensity);
+scene.background = new THREE.Color(0x16233a);
+scene.fog = null;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.maxPixelRatio));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 2.2;
+
 document.body.appendChild(renderer.domElement);
 
-// Better lights
-scene.add(new THREE.AmbientLight(0xffffff, 0.38));
-const keyLight = new THREE.DirectionalLight(0xffffff, 0.92);
+// Strong readable lights
+scene.add(new THREE.AmbientLight(0xffffff, 1.15));
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
 keyLight.position.set(10, 18, 10);
 scene.add(keyLight);
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
+
+const fillLight = new THREE.DirectionalLight(0xffffff, 1.0);
 fillLight.position.set(-10, 10, -8);
 scene.add(fillLight);
 
-// Sky dome (canvas gradient)
+const hemi = new THREE.HemisphereLight(0xffffff, 0x4a6aa6, 1.0);
+scene.add(hemi);
+
+/* =========================
+   SKY DOME (BRIGHTER)
+========================= */
 (function createSkyDome() {
   const skyGeo = new THREE.SphereGeometry(260, 24, 16);
   skyGeo.scale(-1, 1, 1);
@@ -354,9 +363,9 @@ scene.add(fillLight);
   const ctx = canvas.getContext("2d");
 
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0.0, "#0B1220");
-  grad.addColorStop(0.55, "#070B12");
-  grad.addColorStop(1.0, "#03050A");
+  grad.addColorStop(0.0, "#263a63");
+  grad.addColorStop(0.55, "#16233a");
+  grad.addColorStop(1.0, "#0b1020");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 2, 256);
 
@@ -412,21 +421,20 @@ renderer.domElement.addEventListener("pointermove", (e) => {
 });
 
 /* =========================
-   PROCEDURAL TEXTURES
+   PROCEDURAL TEXTURES (BRIGHTER)
 ========================= */
 function makeGroundTexture() {
   const c = document.createElement("canvas");
   c.width = 256; c.height = 256;
   const g = c.getContext("2d");
 
-  g.fillStyle = "#0b1424";
+  g.fillStyle = "#253a63";
   g.fillRect(0, 0, 256, 256);
 
-  // subtle noise specks
   for (let i = 0; i < 2200; i++) {
     const x = (Math.random() * 256) | 0;
     const y = (Math.random() * 256) | 0;
-    const a = Math.random() * 0.07;
+    const a = Math.random() * 0.09;
     g.fillStyle = `rgba(255,255,255,${a})`;
     g.fillRect(x, y, 1, 1);
   }
@@ -444,11 +452,10 @@ function makeWallTexture() {
   c.width = 256; c.height = 256;
   const g = c.getContext("2d");
 
-  g.fillStyle = "#263048";
+  g.fillStyle = "#4a5f8f";
   g.fillRect(0, 0, 256, 256);
 
-  // simple "panel" lines
-  g.strokeStyle = "rgba(255,255,255,0.08)";
+  g.strokeStyle = "rgba(255,255,255,0.16)";
   g.lineWidth = 2;
   for (let y = 0; y <= 256; y += 32) {
     g.beginPath();
@@ -463,11 +470,10 @@ function makeWallTexture() {
     g.stroke();
   }
 
-  // noise
   for (let i = 0; i < 1400; i++) {
     const x = (Math.random() * 256) | 0;
     const y = (Math.random() * 256) | 0;
-    const a = Math.random() * 0.05;
+    const a = Math.random() * 0.04;
     g.fillStyle = `rgba(0,0,0,${a})`;
     g.fillRect(x, y, 1, 1);
   }
@@ -484,17 +490,22 @@ const groundMat = new THREE.MeshStandardMaterial({
   map: makeGroundTexture(),
   roughness: 0.98,
   metalness: 0.0,
+  color: 0xffffff,
+  emissive: 0x0b1630,
+  emissiveIntensity: 0.35,
 });
 
 const wallMat = new THREE.MeshStandardMaterial({
   map: makeWallTexture(),
-  roughness: 0.92,
+  roughness: 0.85,
   metalness: 0.0,
-  color: 0xffffff,
+  color: 0xf3f7ff,
+  emissive: 0x1a2f55,
+  emissiveIntensity: 0.55,
 });
 
 /* =========================
-   PLAYER (SMOOTH MOVE + FX)
+   PLAYER (SMOOTH MOVE + FX) - NO TRAIL
 ========================= */
 const playerVel = new THREE.Vector3(0, 0, 0);
 
@@ -504,7 +515,7 @@ const playerMat = new THREE.MeshStandardMaterial({
   roughness: 0.22,
   metalness: 0.05,
   emissive: 0x062033,
-  emissiveIntensity: 0.55,
+  emissiveIntensity: 0.65,
 });
 const player = new THREE.Mesh(playerGeo, playerMat);
 scene.add(player);
@@ -516,8 +527,8 @@ function createGlowSprite() {
   const g = c.getContext("2d");
 
   const grd = g.createRadialGradient(64, 64, 6, 64, 64, 64);
-  grd.addColorStop(0.0, "rgba(120,255,255,0.65)");
-  grd.addColorStop(0.35, "rgba(120,255,255,0.22)");
+  grd.addColorStop(0.0, "rgba(120,255,255,0.70)");
+  grd.addColorStop(0.35, "rgba(120,255,255,0.26)");
   grd.addColorStop(1.0, "rgba(120,255,255,0.0)");
   g.fillStyle = grd;
   g.fillRect(0, 0, 128, 128);
@@ -527,7 +538,7 @@ function createGlowSprite() {
 
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
   const spr = new THREE.Sprite(mat);
-  spr.scale.set(2.2, 2.2, 1);
+  spr.scale.set(2.4, 2.4, 1);
   return spr;
 }
 
@@ -535,49 +546,10 @@ const ballGlow = createGlowSprite();
 player.add(ballGlow);
 ballGlow.position.set(0, 0.15, 0);
 
-// Trail
-const TRAIL_POINTS = 32;
-const trailPositions = new Float32Array(TRAIL_POINTS * 3);
-const trailGeo = new THREE.BufferGeometry();
-trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
-trailGeo.setDrawRange(0, TRAIL_POINTS);
-const trailMat = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.45 });
-const trailLine = new THREE.Line(trailGeo, trailMat);
-scene.add(trailLine);
-
-let trailHead = 0;
-let trailFilled = false;
-const trailTemp = new Float32Array(TRAIL_POINTS * 3);
-
-function pushTrailPoint(x, y, z) {
-  const i = trailHead * 3;
-  trailPositions[i + 0] = x;
-  trailPositions[i + 1] = y;
-  trailPositions[i + 2] = z;
-
-  trailHead = (trailHead + 1) % TRAIL_POINTS;
-  if (trailHead === 0) trailFilled = true;
-
-  const count = trailFilled ? TRAIL_POINTS : trailHead;
-  trailGeo.setDrawRange(0, count);
-
-  const start = trailFilled ? trailHead : 0;
-  for (let p = 0; p < count; p++) {
-    const src = ((start + p) % TRAIL_POINTS) * 3;
-    const dst = p * 3;
-    trailTemp[dst + 0] = trailPositions[src + 0];
-    trailTemp[dst + 1] = trailPositions[src + 1];
-    trailTemp[dst + 2] = trailPositions[src + 2];
-  }
-  trailGeo.attributes.position.array.set(trailTemp);
-  trailGeo.attributes.position.needsUpdate = true;
-}
-
 function updateBallFX(t, speed01) {
-  playerMat.emissiveIntensity = 0.35 + speed01 * 0.85 + Math.sin(t * 6.0) * 0.05;
-  const s = 2.0 + speed01 * 1.0;
+  playerMat.emissiveIntensity = 0.45 + speed01 * 1.0 + Math.sin(t * 6.0) * 0.05;
+  const s = 2.0 + speed01 * 1.2;
   ballGlow.scale.set(s, s, 1);
-  trailMat.opacity = 0.18 + speed01 * 0.55;
 }
 
 /* =========================
@@ -894,11 +866,6 @@ function rebuildLevel(level) {
   yaw = 0;
   pitch = 0;
 
-  // Seed trail
-  trailHead = 0;
-  trailFilled = false;
-  for (let i = 0; i < TRAIL_POINTS; i++) pushTrailPoint(player.position.x, player.position.y, player.position.z);
-
   // Cameras
   setStaticTopCamera();
   fitTopOrthoCamera();
@@ -998,8 +965,6 @@ function movePlayer(dt, t) {
     const roll = dist / CONFIG.playerRadius;
     player.rotateX(roll);
   }
-
-  pushTrailPoint(player.position.x, player.position.y, player.position.z);
 
   const speed01 = clamp(speed / CONFIG.moveMaxSpeed, 0, 1);
   updateBallFX(t, speed01);
