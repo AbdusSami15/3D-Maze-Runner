@@ -19,7 +19,10 @@ const CONFIG = {
 
   // Top cam
   topCamHeight: 40,
-  orthoPadding: 1.12,
+  // Smaller padding = top-down view fills more of the screen (less empty border)
+  orthoPadding: 1.06,
+  // Mobile gets a bit more zoom so fullscreen feels "actually fullscreen"
+  orthoPaddingMobile: 0.92,
 
   // FPS
   fpsEyeHeight: 0.75,
@@ -67,7 +70,6 @@ const ui = {
   restartBtn: document.getElementById("restartBtn"),
 
   btnCam: document.getElementById("btnCam"),
-  btnFS: document.getElementById("btnFS"),
   btnUp: document.getElementById("btnUp"),
   btnDown: document.getElementById("btnDown"),
   btnLeft: document.getElementById("btnLeft"),
@@ -89,14 +91,6 @@ function requestFullscreenSafe() {
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     else if (el.msRequestFullscreen) el.msRequestFullscreen();
   } catch (_) { }
-}
-
-// On-screen fullscreen button (mobile/desktop)
-if (ui.btnFS) {
-  ui.btnFS.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    requestFullscreenSafe();
-  });
 }
 
 function isLikelyMobile() {
@@ -983,8 +977,9 @@ function setStaticTopCamera() {
 }
 
 function fitTopOrthoCamera() {
-  const halfMazeW = worldW * 0.5 * CONFIG.orthoPadding;
-  const halfMazeD = worldD * 0.5 * CONFIG.orthoPadding;
+  const pad = (isLikelyMobile() ? CONFIG.orthoPaddingMobile : CONFIG.orthoPadding);
+  const halfMazeW = worldW * 0.5 * pad;
+  const halfMazeD = worldD * 0.5 * pad;
 
   const aspect = window.innerWidth / window.innerHeight;
   const mazeAspect = worldW / worldD;
