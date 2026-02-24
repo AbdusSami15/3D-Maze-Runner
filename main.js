@@ -19,10 +19,10 @@ const CONFIG = {
 
   // Top cam
   topCamHeight: 40,
-  // Smaller padding = top-down view fills more of the screen (less empty border)
-  orthoPadding: 1.06,
-  // Mobile gets a bit more zoom so fullscreen feels "actually fullscreen"
-  orthoPaddingMobile: 0.92,
+  // Ortho padding: 1.0 means the maze touches the edges exactly.
+  // We use a tiny bit of breathing room so it doesn't look "cut off" by the bezel.
+  orthoPadding: 1.0,
+  orthoPaddingMobile: 0.98,
 
   // FPS
   fpsEyeHeight: 0.75,
@@ -159,7 +159,7 @@ const AudioFX = (() => {
   function userGestureUnlock() {
     ensure();
     if (!ctx) return;
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    if (ctx.state === "suspended") ctx.resume().catch(() => { });
   }
 
   function tone(freq, durationMs, type = "sine", gain = 0.35) {
@@ -186,7 +186,7 @@ const AudioFX = (() => {
   }
 
   function click() { tone(580, 45, "square", 0.24); }
-  
+
   function win() {
     // More pleasant win sound
     tone(440, 100, "sine", 0.25);
@@ -229,10 +229,21 @@ window.addEventListener("keydown", () => AudioFX.userGestureUnlock(), { once: tr
    LEVEL SYSTEM + GENERATOR
 ========================= */
 function generateMaze(level) {
-  const raw = CONFIG.baseMazeOddSize + (level - 1) * CONFIG.sizeGrowEveryLevel;
-  const size = makeOdd(Math.min(raw, CONFIG.maxMazeOddSize));
-  const rows = size;
-  const cols = size;
+  const aspect = window.innerWidth / window.innerHeight;
+
+  const baseSize = CONFIG.baseMazeOddSize + (level - 1) * CONFIG.sizeGrowEveryLevel;
+  const targetSize = Math.min(baseSize, CONFIG.maxMazeOddSize);
+
+  let rows, cols;
+  if (aspect >= 1) {
+    // Landscape: more columns than rows
+    cols = makeOdd(targetSize);
+    rows = makeOdd(Math.max(5, Math.round(targetSize / aspect)));
+  } else {
+    // Portrait: more rows than columns
+    rows = makeOdd(targetSize);
+    cols = makeOdd(Math.max(5, Math.round(targetSize * aspect)));
+  }
 
   const grid = Array.from({ length: rows }, () => Array(cols).fill(1));
   const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
@@ -243,7 +254,7 @@ function generateMaze(level) {
   visited[startR][startC] = true;
   grid[startR][startC] = 0;
 
-  const dirs = [[-2,0],[2,0],[0,-2],[0,2]];
+  const dirs = [[-2, 0], [2, 0], [0, -2], [0, 2]];
 
   function inBounds(r, c) {
     return r > 0 && c > 0 && r < rows - 1 && c < cols - 1;
@@ -321,13 +332,13 @@ const LevelManager = (() => {
       const data = JSON.parse(raw);
       if (data.best && typeof data.best === "number") bestLevel = data.best;
       if (bestLevel < 1) bestLevel = 1;
-    } catch {}
+    } catch { }
   }
 
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify({ best: bestLevel }));
-    } catch {}
+    } catch { }
   }
 
   function updateUI() {
@@ -542,7 +553,7 @@ for (let i = 0; i <= 512; i += gridSize) {
   groundCtx.moveTo(i, 0);
   groundCtx.lineTo(i, 512);
   groundCtx.stroke();
-  
+
   groundCtx.beginPath();
   groundCtx.moveTo(0, i);
   groundCtx.lineTo(512, i);
@@ -720,7 +731,7 @@ scene.add(trailLine);
 
 function updateTrail() {
   if (!CONFIG.trailEffect) return;
-  
+
   trailPoints.push(player.position.clone());
   if (trailPoints.length > 30) trailPoints.shift();
 
@@ -918,11 +929,11 @@ renderer.domElement.addEventListener("touchmove", (e) => {
     const sensitivity = 0.003;
     const deltaX = e.touches[0].clientX - touchStartX;
     const deltaY = e.touches[0].clientY - touchStartY;
-    
+
     yaw -= deltaX * sensitivity;
     pitch -= deltaY * sensitivity;
     pitch = clamp(pitch, -CONFIG.fpsPitchLimit, CONFIG.fpsPitchLimit);
-    
+
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
   }

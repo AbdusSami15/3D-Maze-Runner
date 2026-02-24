@@ -65,9 +65,20 @@ canvas{
   -webkit-backdrop-filter: blur(10px);
   line-height: 1.35;
 
-  padding-top: calc(12px + env(safe-area-inset-top));
-  padding-left: calc(12px + env(safe-area-inset-left));
-  padding-right: calc(12px + env(safe-area-inset-right));
+  padding-top: calc(10px + env(safe-area-inset-top));
+  padding-left: calc(10px + env(safe-area-inset-left));
+  padding-right: calc(10px + env(safe-area-inset-right));
+  
+  max-width: calc(100% - 28px);
+}
+
+@media (max-width: 480px) {
+  #hud {
+    top: 10px;
+    left: 10px;
+    padding: 10px;
+    border-radius: 12px;
+  }
 }
 
 #status{ font-size:14px; font-weight:750; }
@@ -227,9 +238,13 @@ canvas{
   color: rgba(255,255,255,0.50);
 }
 
-@media (max-width: 420px){
-  .title{ font-size: 34px; }
-  .actions{ grid-template-columns: 1fr; }
+@media (max-width: 480px){
+  .title{ font-size: 30px; margin: 10px 0 4px; }
+  .tag{ padding: 5px 10px; font-size: 11px; }
+  .sub{ font-size: 13px; margin-bottom: 14px; }
+  .actions{ grid-template-columns: 1fr; gap: 8px; }
+  .btn{ height: 46px; font-size: 14px; }
+  .cardBody{ padding: 20px 18px 16px; }
 }
 
 /* =========================
@@ -285,9 +300,30 @@ canvas{
 
   /* Move CAM away from the D-pad cluster */
   position: fixed;
-  right: calc(16px + env(safe-area-inset-right));
-  bottom: calc(16px + env(safe-area-inset-bottom));
+  right: calc(10px + env(safe-area-inset-right));
+  bottom: calc(10px + env(safe-area-inset-bottom));
   z-index: 41;
+}
+
+@media (max-width: 480px) {
+  .mBtn {
+    width: 60px;
+    height: 60px;
+    font-size: 20px;
+    border-radius: 12px;
+  }
+  #mobileControls {
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: calc(10px + env(safe-area-inset-left));
+    grid-template-columns: 60px 60px 60px;
+    grid-template-rows: 60px 60px;
+    gap: 8px;
+  }
+  .mBtn.cam {
+    width: 76px;
+    height: 60px;
+    font-size: 14px;
+  }
 }
 
 /* Explicit button placement for grid */
